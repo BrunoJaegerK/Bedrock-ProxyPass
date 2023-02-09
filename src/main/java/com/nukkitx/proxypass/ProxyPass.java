@@ -13,7 +13,7 @@ import com.nukkitx.nbt.NbtUtils;
 import com.nukkitx.protocol.bedrock.BedrockClient;
 import com.nukkitx.protocol.bedrock.BedrockPacketCodec;
 import com.nukkitx.protocol.bedrock.BedrockServer;
-import com.nukkitx.protocol.bedrock.v557.Bedrock_v557;
+import com.nukkitx.protocol.bedrock.v567.Bedrock_v567;
 import com.nukkitx.proxypass.network.ProxyBedrockEventHandler;
 import io.netty.util.ResourceLeakDetector;
 import lombok.AccessLevel;
@@ -23,8 +23,6 @@ import lombok.extern.log4j.Log4j2;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UncheckedIOException;
-import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -39,12 +37,11 @@ public class ProxyPass {
     public static final ObjectMapper JSON_MAPPER = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     public static final YAMLMapper YAML_MAPPER = (YAMLMapper) new YAMLMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     public static final String MINECRAFT_VERSION;
-    public static final BedrockPacketCodec CODEC = Bedrock_v557.V557_CODEC;
+    public static final BedrockPacketCodec CODEC = Bedrock_v567.V567_CODEC;
     public static final int PROTOCOL_VERSION = CODEC.getProtocolVersion();
+    public static final int SHIELD_RUNTIME_ID = 355; // Change this when the item palette changes.
     private static final DefaultPrettyPrinter PRETTY_PRINTER = new DefaultPrettyPrinter();
     public static Map<Integer, String> legacyIdMap = new HashMap<>();
-
-    public static final int SHIELD_RUNTIME_ID = 355; // Change this when the item palette changes.
 
     static {
         DefaultIndenter indenter = new DefaultIndenter("    ", "\n");
@@ -61,11 +58,11 @@ public class ProxyPass {
     }
 
     private final AtomicBoolean running = new AtomicBoolean(true);
-    private BedrockServer bedrockServer;
     private final Set<BedrockClient> clients = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private int maxClients = 0;
     @Getter(AccessLevel.NONE)
     private final Set<Class<?>> ignoredPackets = Collections.newSetFromMap(new IdentityHashMap<>());
+    private BedrockServer bedrockServer;
+    private int maxClients = 0;
     private InetSocketAddress targetAddress;
     private InetSocketAddress proxyAddress;
     private Configuration configuration;
@@ -155,27 +152,27 @@ public class ProxyPass {
     public void saveNBT(String dataName, Object dataTag) {
         Path path = dataDir.resolve(dataName + ".dat");
         try (OutputStream outputStream = Files.newOutputStream(path, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-             NBTOutputStream nbtOutputStream = NbtUtils.createNetworkWriter(outputStream)){
+             NBTOutputStream nbtOutputStream = NbtUtils.createNetworkWriter(outputStream)) {
             nbtOutputStream.writeTag(dataTag);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
     public Object loadNBT(String dataName) {
         Path path = dataDir.resolve(dataName + ".dat");
         try (InputStream inputStream = Files.newInputStream(path);
-             NBTInputStream nbtInputStream = NbtUtils.createNetworkReader(inputStream)){
+             NBTInputStream nbtInputStream = NbtUtils.createNetworkReader(inputStream)) {
             return nbtInputStream.readTag();
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
     public Object loadGzipNBT(String dataName) {
         Path path = dataDir.resolve(dataName);
         try (InputStream inputStream = Files.newInputStream(path);
-             NBTInputStream nbtInputStream = NbtUtils.createGZIPReader(inputStream)){
+             NBTInputStream nbtInputStream = NbtUtils.createGZIPReader(inputStream)) {
             return nbtInputStream.readTag();
         } catch (IOException e) {
             return null;
@@ -184,13 +181,10 @@ public class ProxyPass {
 
     public void saveJson(String name, Object object) {
         Path outPath = dataDir.resolve(name);
-        try {
-            Files.createDirectories(outPath.getParent());
-            try (OutputStream outputStream = Files.newOutputStream(outPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
-                ProxyPass.JSON_MAPPER.writer(PRETTY_PRINTER).writeValue(outputStream, object);
-            }
+        try (OutputStream outputStream = Files.newOutputStream(outPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
+            ProxyPass.JSON_MAPPER.writer(PRETTY_PRINTER).writeValue(outputStream, object);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -199,7 +193,7 @@ public class ProxyPass {
         try (InputStream inputStream = Files.newInputStream(path, StandardOpenOption.READ)) {
             return ProxyPass.JSON_MAPPER.readValue(inputStream, reference);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -208,15 +202,15 @@ public class ProxyPass {
         try {
             Files.write(outPath, nbt.toString().getBytes(StandardCharsets.UTF_8), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
     public boolean isIgnoredPacket(Class<?> clazz) {
         return this.ignoredPackets.contains(clazz);
     }
-    
+
     public boolean isFull() {
-        return maxClients > 0 ? this.clients.size() >= maxClients : false;
+        return maxClients > 0 && this.clients.size() >= maxClients;
     }
 }
